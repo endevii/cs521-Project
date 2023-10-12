@@ -6,13 +6,13 @@ if __name__ == '__main__':
     port = 5000
     number_of_clients = int(input('Enter number of clients: '))
 
-    serverSocket = socket.socket(socket.AF_NET, socket.SOCK_STREAM)
+    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     serverSocket.bind((host, port))
     serverSocket.listen(number_of_clients)
 
     # Establish the connections
     connections = []
-    print('Starting clients')
+    print('Starting clients...')
     for i in range(number_of_clients):
         connect = serverSocket.accept()
         connections.append(connect)
