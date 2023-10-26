@@ -44,7 +44,7 @@ if __name__ == "__main__":
                     del connections[connSocket]
                     for c in connections.keys():
                         print(str(c), "-->", str(connections[c]))
-                    conSocket.send('Success'.encode())
+                    connSocket.send('Success'.encode())
                     connSocket.close()
                 elif (value == 'close'):
                     print("Closing server due to", addr)

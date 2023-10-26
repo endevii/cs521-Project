@@ -10,7 +10,11 @@ if __name__ == "__main__":
     # Connect to the server
     socketClient.connect((host, port))
 
+    connected = True
+
     while True:
+        if connected == False:
+            socketClient.connect((host, port))
         inp = input(
             'What command would you like: \nTo send file: send\nTo exit and finalize: exit\nTo get others on server: clients\n')
 
@@ -32,8 +36,24 @@ if __name__ == "__main__":
                     socketClient.send(str(data).encode())
                     data = file.read()
 
-                    # Close the file after it has been sent
-                    file.close()
+                # Close the file after it has been sent
+                file.close()
+                socketClient.close()
+            except:
+                print('You entered an invalid filename!\nPlease enter a valid name!')
+        elif (inp.lower() == 'send multi'):
+            filename = input('Input the filename you want to send: ')
+            try:
+                file = open(filename, 'r')
+                data = file.read()
+                if not data:
+                    break
+                while data:
+                    socketClient.send(str(data).encode())
+                    data = file.read()
+
+                # Close the file after it has been sent
+                file.close()
             except:
                 print('You entered an invalid filename!\nPlease enter a valid name!')
         elif (inp.lower() == 'clients'):
