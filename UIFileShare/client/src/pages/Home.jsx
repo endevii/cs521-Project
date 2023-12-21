@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const Home = ({ socket }) => {
+const Home = ({ socket, room }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [error, setError] = useState('');

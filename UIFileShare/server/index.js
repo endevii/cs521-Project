@@ -1,7 +1,8 @@
 const express = require('express');
 const app = express();
 const PORT = 3001;
-
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 const http = require('http').Server(app);
 const cors = require('cors');
 const fs = require('fs');
@@ -16,9 +17,16 @@ app.use(express.static('public'));
 app.use(express.json());
 app.use(cors());
 
-let users = [];
-let files = [];
-
+// let users = [];
+// let files = [];
+let channels = {
+  "local": {
+    users: [],
+    files: [],
+    messages: [],
+    password: null
+  }
+};
 
 function saveFile(file, fileName) {
   console.log(file);
@@ -35,43 +43,72 @@ function saveFile(file, fileName) {
   return fileURL;
 }
 
-socketIO.on('connection', (socket) => {
+socketIO.on('connection', async (socket) => {
   console.log(`⚡: ${socket.id} user just connected!`);
-  socket.on('message', (data) => {
-    socketIO.emit('messageResponse', data);
+  let { roomId } = socket.handshake.query;
+  await socket.join(roomId);
+
+  socket.on('createChannel', (data) => {
+    let password = data.password;
+    if (password !== null) {
+      password = bcrypt.hashSync(password, saltRounds);
+    }
+    channels[data.channel] = {
+      users: [],
+      files: [],
+      messages: [],
+      password: password
+    };
+    socketIO.emit('channelResponse', channels);
   });
 
-  socket.on('fetchUsers', () => {
-    socketIO.emit('newUserResponse', users);
+  socket.on('joinChannel', (data) => {
+    let password = data.password;
+    if (channels[data.channel].password !== null) {
+      if (!bcrypt.compareSync(password, channels[data.channel].password)) {
+        socketIO.to(socket.id).emit('channelErrorResponse', "Incorrect password");
+        return;
+      }
+    }
+    channels[data.channel].users.push(data.user);
+    socketIO.to(data.channel).emit('channelResponse', channels);
   });
 
-  socket.on('fetchFiles', () => {
-    socketIO.emit('fileResponse', files);
+  socket.on('leaveChannel', (data) => {
+    channels[data.channel].users = channels[data.channel].users.filter((user) => user.socketID !== socket.id);
+    socketIO.emit('channelResponse', channels);
+  });
+
+  socket.on('message', (data, channel) => {
+    socketIO.to(channel).emit('messageResponse', data);
   });
 
   socket.on('typing', (data) => socket.broadcast.emit('typingResponse', data));
 
   socket.on('newUser', (data) => {
     users.push(data);
-    console.log(users)
-    socketIO.emit('newUserResponse', users);
+    channels["local"].users = [...channels["local"].users, data];
+    console.log(channels);
+    socket.join("local");
+    socketIO.to("local").emit('newUserResponse', channels["local"].users);
   });
 
   socket.on('file', (data) => {
     console.log(data);
+    let channel = data.channel;
     const fileURL = saveFile(data.file, data.fileName);
     if (!fileURL) {
-      socketIO.emit('fileResponse', 'Error saving file');
+      socketIO.to(channel).emit('fileResponse', 'Error saving file');
       return;
     }
     const file = {
       fileURL,
       name: data.fileName,
     };
-    // console.log(file);
-    files.push(file);
-    socketIO.emit('fileResponse', files);
-    socketIO.emit('messageResponse', {
+
+    channels[channel].files.push(file);
+    socketIO.to(channel).emit('fileResponse', channels[channel].files);
+    socketIO.to(channel).emit('messageResponse', {
       type: 'file',
       name: data.name,
       text: `${file.name}`,
@@ -81,10 +118,21 @@ socketIO.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnectUser', () => {
+  socket.on('disconnectUser', (channel) => {
     console.log('🔥: A user disconnected');
-    users = users.filter((user) => user.socketID !== socket.id);
-    socketIO.emit('newUserResponse', users);
+    channels[channel].users = channels[channel].users.filter((user) => user.socketID !== socket.id);
+    socketIO.to(channel).emit('newUserResponse', channels[channel].users);
+    socket.disconnect();
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔥: A user disconnected');
+    for (const channel in channels) {
+      channels[channel].users = channels[channel].users.filter((user) => user.socketID !== socket.id);
+      socketIO.to(channel).emit('newUserResponse', channels[channel].users);
+    }
+    // users = users.filter((user) => user.socketID !== socket.id);
+    // socketIO.emit('newUserResponse', users);
     socket.disconnect();
   });
 });
